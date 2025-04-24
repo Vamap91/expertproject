@@ -1,7 +1,5 @@
 streamlit
+openai
 PyMuPDF
-transformers
-torch
 yt-dlp
-whisper
 pyttsx3
