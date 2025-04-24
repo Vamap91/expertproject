@@ -1,14 +1,13 @@
-import streamlit as st
 import sys
 import os
 
-# Adiciona "touch utils" ao path para importar os módulos internos
 sys.path.append(os.path.abspath("touch utils"))
 
 from audio_generator import text_to_audio
 from pdf_processor import process_pdf
 from youtube_transcriber import transcribe_and_summarize
-from formatter import to_markdown  # ← agora vai funcionar também
+from formatter import to_markdown
+
 
 
 st.set_page_config(page_title="Narrador de Projetos IA", page_icon="🎧", layout="centered")
