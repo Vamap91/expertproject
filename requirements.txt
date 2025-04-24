@@ -3,3 +3,5 @@ openai
 PyMuPDF
 yt-dlp
 pyttsx3
+transformers
+torch
