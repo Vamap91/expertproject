@@ -12,15 +12,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Adiciona a pasta com os utilitários ao sys.path
-sys.path.append(os.path.abspath("touch utils"))
+# Usamos "touch_utils" ao invés de "touch utils" para evitar problemas com espaço
+sys.path.append(os.path.abspath("touch_utils"))
 
 # Imports dos módulos auxiliares
 try:
-    from audio_generator import text_to_audio
-    from youtube_transcriber import transcribe_and_summarize
-    from formatter import to_markdown
+    from touch_utils.audio_generator import text_to_audio
+    from touch_utils.youtube_transcriber import transcribe_and_summarize
+    from touch_utils.formatter import to_markdown
+    from touch_utils.pdf_processor import process_pdf_complete
 except ImportError as e:
-    st.error(f"Erro ao importar módulos: {str(e)}. Verifique se a pasta 'touch utils' existe com todos os arquivos necessários.")
+    st.error(f"Erro ao importar módulos: {str(e)}. Verifique se a pasta 'touch_utils' existe com todos os arquivos necessários.")
     logger.error(f"Import error: {str(e)}")
 
 
@@ -115,25 +117,20 @@ def process_pdf(file, model: str) -> Tuple[str, str]:
         Tupla (resumo, insights)
     """
     try:
-        import fitz  # PyMuPDF
-        
         # Verifica tamanho do arquivo
         file_size_mb = len(file.getvalue()) / (1024 * 1024)
         if file_size_mb > AppConfig.MAX_PDF_SIZE_MB:
             return f"Arquivo muito grande ({file_size_mb:.1f}MB). Limite: {AppConfig.MAX_PDF_SIZE_MB}MB", ""
         
-        # Extrai texto do PDF
-        with st.status("Extraindo texto do PDF...", expanded=False) as status:
-            doc = fitz.open(stream=file.read(), filetype="pdf")
-            text = "".join([page.get_text() for page in doc])
-            status.update(label="Texto extraído com sucesso!", state="complete", expanded=False)
-        
-        # Analisa com IA
-        with st.status("Analisando conteúdo com IA...", expanded=False) as status:
-            summary = summarize_text_openai(text, model)
+        # Processa o PDF usando a função do módulo pdf_processor
+        with st.status("Analisando PDF...", expanded=False) as status:
+            summary, stats = process_pdf_complete(file.getvalue(), model)
             status.update(label="Análise concluída!", state="complete", expanded=False)
         
-        return summary, "Análise realizada com sucesso"
+        # Formata insights baseados nas estatísticas retornadas
+        insights = f"Documento: {stats.get('title', 'Sem título')} | {stats.get('pages', 0)} páginas | {stats.get('words', 0)} palavras"
+        
+        return summary, insights
     except Exception as e:
         logger.error(f"PDF processing error: {str(e)}")
         return f"Erro ao processar PDF: {str(e)}", ""
