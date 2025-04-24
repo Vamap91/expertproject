@@ -1,11 +1,8 @@
 import streamlit as st
 import sys
 import os
-import time
 import logging
-from typing import Tuple, Optional
-import openai
-from openai import OpenAI
+from typing import Tuple
 
 # IMPORTANTE: Configurar a página deve ser a primeira operação do Streamlit
 st.set_page_config(
@@ -20,7 +17,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Adiciona a pasta com os utilitários ao sys.path
-# Mantém o nome original da pasta com espaço
 sys.path.append(os.path.abspath("touch utils"))
 
 # Imports dos módulos auxiliares
@@ -28,79 +24,39 @@ try:
     from formatter import to_markdown
     from audio_generator import text_to_audio
     from youtube_transcriber import transcribe_and_summarize
-    from pdf_processor import process_pdf_complete
 except ImportError as e:
     st.error(f"Erro ao importar módulos: {str(e)}. Verifique se a pasta 'touch utils' existe com todos os arquivos necessários.")
     logger.error(f"Import error: {str(e)}")
-
-# Resto do código...
-
+    
+# Configuração de API
+import openai
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Configurações do aplicativo
-class AppConfig:
-    """Centraliza as configurações do aplicativo"""
-    TITLE = "🎙️ Narrador de Projetos com IA"
-    SUBTITLE = "Transforme documentos e vídeos em áudio narrado com análise inteligente"
-    ICON = "🎧"
-    PRIMARY_COLOR = "#1E88E5"
-    SECONDARY_COLOR = "#004D40"
-    BG_COLOR = "#F5F7F9"
-    MODEL_OPTIONS = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
-    DEFAULT_MODEL = "gpt-3.5-turbo"
-    MAX_PDF_SIZE_MB = 10
-    CACHE_TTL = 3600  # 1 hora
+TITLE = "🎙️ Narrador de Projetos com IA"
+SUBTITLE = "Transforme documentos e vídeos em áudio narrado com análise inteligente"
+MODEL_OPTIONS = ["gpt-3.5-turbo", "gpt-4"]
+DEFAULT_MODEL = "gpt-3.5-turbo"
+MAX_PDF_SIZE_MB = 10
 
-
-# Inicialização da API OpenAI
-@st.cache_resource
-def get_openai_client():
-    """Inicializa e retorna o cliente OpenAI com cache"""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        st.error("⚠️ OPENAI_API_KEY não encontrada nas variáveis de ambiente.")
-        logger.error("OpenAI API key not found")
-        return None
-    try:
-        return OpenAI(api_key=api_key)
-    except Exception as e:
-        st.error(f"⚠️ Erro ao inicializar cliente OpenAI: {str(e)}")
-        logger.error(f"OpenAI client initialization error: {str(e)}")
-        return None
-
-
-# Função de análise via OpenAI com cache
-@st.cache_data(ttl=AppConfig.CACHE_TTL)
-def summarize_text_openai(text: str, model: str) -> str:
-    """
-    Analisa o texto usando a API OpenAI com sistema de cache
+# Função de análise via OpenAI
+def summarize_text_openai(text, model):
+    prompt = f"""
+    Analise o conteúdo abaixo de forma técnica e profissional:
     
-    Args:
-        text: Texto a ser analisado
-        model: Modelo da OpenAI a ser usado
-        
-    Returns:
-        Resumo e análise do texto
+    {text}
+    
+    Responda com:
+    1. Um resumo executivo conciso (max 3 parágrafos)
+    2. Principais pontos técnicos identificados (formatados como lista)
+    3. Recomendações práticas e sugestões de melhoria (formatados como lista)
+    4. Conclusão com próximos passos sugeridos
+    
+    Use markdown para formatação.
     """
-    client = get_openai_client()
-    if not client:
-        return "Erro ao inicializar cliente OpenAI. Verifique a chave de API."
     
     try:
-        prompt = f"""
-        Analise o conteúdo abaixo de forma técnica e profissional:
-        
-        {text}
-        
-        Responda com:
-        1. Um resumo executivo conciso (max 3 parágrafos)
-        2. Principais pontos técnicos identificados (formatados como lista)
-        3. Recomendações práticas e sugestões de melhoria (formatados como lista)
-        4. Conclusão com próximos passos sugeridos
-        
-        Use markdown para formatação.
-        """
-        
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model=model,
             messages=[
                 {"role": "system", "content": "Você é um analista técnico especializado em extrair insights valiosos de documentos e vídeos técnicos."},
@@ -113,116 +69,100 @@ def summarize_text_openai(text: str, model: str) -> str:
         logger.error(f"OpenAI API error: {str(e)}")
         return f"Erro ao processar com OpenAI: {str(e)}"
 
-
 # Processador de PDF com OpenAI
 def process_pdf(file, model: str) -> Tuple[str, str]:
-    """
-    Processa um arquivo PDF e extrai insights usando IA
-    
-    Args:
-        file: Arquivo PDF carregado
-        model: Modelo da OpenAI a ser usado
-        
-    Returns:
-        Tupla (resumo, insights)
-    """
     try:
+        import fitz  # PyMuPDF
+        
         # Verifica tamanho do arquivo
         file_size_mb = len(file.getvalue()) / (1024 * 1024)
-        if file_size_mb > AppConfig.MAX_PDF_SIZE_MB:
-            return f"Arquivo muito grande ({file_size_mb:.1f}MB). Limite: {AppConfig.MAX_PDF_SIZE_MB}MB", ""
+        if file_size_mb > MAX_PDF_SIZE_MB:
+            return f"Arquivo muito grande ({file_size_mb:.1f}MB). Limite: {MAX_PDF_SIZE_MB}MB", ""
         
-        # Processa o PDF usando a função do módulo pdf_processor
-        with st.status("Analisando PDF...", expanded=False) as status:
-            summary, stats = process_pdf_complete(file.getvalue(), model)
+        # Extrai texto do PDF
+        with st.status("Extraindo texto do PDF...", expanded=False) as status:
+            doc = fitz.open(stream=file.read(), filetype="pdf")
+            text = "".join([page.get_text() for page in doc])
+            status.update(label="Texto extraído com sucesso!", state="complete", expanded=False)
+        
+        # Analisa com IA
+        with st.status("Analisando conteúdo com IA...", expanded=False) as status:
+            summary = summarize_text_openai(text, model)
             status.update(label="Análise concluída!", state="complete", expanded=False)
         
-        # Formata insights baseados nas estatísticas retornadas
-        insights = f"Documento: {stats.get('title', 'Sem título')} | {stats.get('pages', 0)} páginas | {stats.get('words', 0)} palavras"
-        
-        return summary, insights
+        return summary, "Análise realizada com sucesso"
     except Exception as e:
         logger.error(f"PDF processing error: {str(e)}")
         return f"Erro ao processar PDF: {str(e)}", ""
 
-
-def setup_ui():
-    """Configura a interface do usuário"""
-    # Configuração de página e tema
-    st.set_page_config(
-        page_title=AppConfig.TITLE,
-        page_icon=AppConfig.ICON,
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    # CSS personalizado
-    st.markdown(f"""
+# CSS personalizado
+def apply_custom_css():
+    st.markdown("""
     <style>
         /* Cores gerais do tema */
-        :root {{
-            --primary-color: {AppConfig.PRIMARY_COLOR};
-            --secondary-color: {AppConfig.SECONDARY_COLOR};
-            --background-color: {AppConfig.BG_COLOR};
-        }}
+        :root {
+            --primary-color: #1E88E5;
+            --secondary-color: #004D40;
+            --background-color: #F5F7F9;
+        }
         
         /* Cabeçalho */
-        .main .block-container {{
+        .main .block-container {
             padding-top: 2rem;
             padding-bottom: 2rem;
-        }}
+        }
         
         /* Estilos gerais */
-        h1, h2, h3 {{
+        h1, h2, h3 {
             color: var(--primary-color);
-        }}
+        }
         
-        .stTabs [data-baseweb="tab-list"] {{
+        .stTabs [data-baseweb="tab-list"] {
             gap: 2rem;
-        }}
+        }
         
-        .stTabs [data-baseweb="tab"] {{
+        .stTabs [data-baseweb="tab"] {
             height: 4rem;
             white-space: pre-wrap;
             border-radius: 4px 4px 0px 0px;
             gap: 1rem;
-        }}
+        }
         
         /* Estilo dos botões */
-        .stButton>button {{
+        .stButton>button {
             border-radius: 4px;
             padding: 0.5rem 1rem;
             font-weight: 500;
-        }}
+        }
         
-        /* Destaque da escolha do modelo */
-        div[data-testid="stSelectbox"] > div:first-child {{
-            border-radius: 4px;
-            border-color: var(--primary-color);
-        }}
-        
-        /* Container de cartões para resultados */
-        .card {{
+        /* Container de cartões */
+        .card {
             border-radius: 10px;
             padding: 1.5rem;
             margin-bottom: 1rem;
             border: 1px solid #e6e6e6;
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             background-color: white;
-        }}
+        }
     </style>
     """, unsafe_allow_html=True)
+
+def main():
+    # Aplica CSS
+    apply_custom_css()
     
-    # Cabeçalho com animação
+    # Cabeçalho
     st.markdown(f"""
         <div style="text-align: center; margin-bottom: 2rem;">
-            <h1>{AppConfig.TITLE}</h1>
-            <p style="font-size: 1.2rem; color: grey;">{AppConfig.SUBTITLE}</p>
+            <h1>{TITLE}</h1>
+            <p style="font-size: 1.2rem; color: grey;">{SUBTITLE}</p>
         </div>
     """, unsafe_allow_html=True)
     
+    # Layout de colunas
     col1, col2 = st.columns([2, 1])
     
+    # Coluna de informações e configurações
     with col2:
         st.markdown("""
         <div class="card">
@@ -236,42 +176,22 @@ def setup_ui():
         </div>
         """, unsafe_allow_html=True)
         
-        # Escolha do modelo da OpenAI com explicação
+        # Escolha do modelo da OpenAI
         st.markdown("<h3>Configuração da IA</h3>", unsafe_allow_html=True)
         selected_model = st.selectbox(
             "Escolha o modelo para análise:",
-            options=AppConfig.MODEL_OPTIONS,
-            index=AppConfig.MODEL_OPTIONS.index(AppConfig.DEFAULT_MODEL),
+            options=MODEL_OPTIONS,
+            index=MODEL_OPTIONS.index(DEFAULT_MODEL),
             help="Modelos mais avançados oferecem análises mais detalhadas, mas podem levar mais tempo"
         )
-        
-        # Modo avançado
-        with st.expander("Configurações avançadas"):
-            st.checkbox("Ativar detecção de língua", value=True, 
-                      help="Detecta automaticamente o idioma do conteúdo")
-            st.slider("Nível de detalhamento", min_value=1, max_value=5, value=3,
-                    help="Ajusta o nível de detalhamento da análise")
-            st.toggle("Incluir citações", value=True)
-    
-    # Retorna o modelo selecionado
-    return selected_model
-
-
-def main():
-    """Função principal da aplicação"""
-    # Configura a UI e obtém o modelo selecionado
-    selected_model = setup_ui()
     
     # Inicializa estados da sessão
     if "resumo" not in st.session_state:
         st.session_state["resumo"] = None
-    if "status" not in st.session_state:
-        st.session_state["status"] = None
     if "insights" not in st.session_state:
         st.session_state["insights"] = None
     
-    # Cria as tabs em uma coluna principal
-    col1, _ = st.columns([2, 1])
+    # Coluna principal com tabs
     with col1:
         tabs = st.tabs([
             "📄 Upload de Documento",
@@ -291,7 +211,7 @@ def main():
             uploaded_pdf = st.file_uploader(
                 "Arraste ou selecione seu arquivo",
                 type=["pdf"],
-                help=f"Tamanho máximo: {AppConfig.MAX_PDF_SIZE_MB}MB"
+                help=f"Tamanho máximo: {MAX_PDF_SIZE_MB}MB"
             )
             
             if uploaded_pdf:
@@ -303,7 +223,6 @@ def main():
                         else:
                             st.session_state["resumo"] = resumo
                             st.session_state["insights"] = insights
-                            st.session_state["status"] = "success"
                             st.success("Análise completa! Vá para a aba 'Áudio e Exportação'.")
                             # Mostra prévia do resultado
                             with st.expander("Prévia do resultado", expanded=True):
@@ -336,7 +255,6 @@ def main():
                             resumo, insights = transcribe_and_summarize(video_url, selected_model)
                             st.session_state["resumo"] = resumo
                             st.session_state["insights"] = insights
-                            st.session_state["status"] = "success"
                             st.success("Análise completa! Vá para a aba 'Áudio e Exportação'.")
                             # Mostra prévia do resultado
                             with st.expander("Prévia do resultado", expanded=True):
@@ -394,7 +312,7 @@ def main():
                         logger.error(f"Markdown conversion error: {str(e)}")
                         st.error(f"Erro ao converter para Markdown: {str(e)}")
                     
-                    # Outras opções de exportação
+                    # Exportação como texto
                     st.download_button(
                         "📝 Exportar como TXT",
                         st.session_state["resumo"],
@@ -403,7 +321,6 @@ def main():
                     )
             else:
                 st.info("Você ainda não carregou um PDF ou link do YouTube. Por favor, utilize uma das outras abas para gerar conteúdo.")
-
 
 if __name__ == "__main__":
     try:
