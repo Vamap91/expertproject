@@ -7,23 +7,33 @@ from typing import Tuple, Optional
 import openai
 from openai import OpenAI
 
+# IMPORTANTE: Configurar a página deve ser a primeira operação do Streamlit
+st.set_page_config(
+    page_title="🎙️ Narrador de Projetos com IA",
+    page_icon="🎧",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Adiciona a pasta com os utilitários ao sys.path
-# Usamos "touch_utils" ao invés de "touch utils" para evitar problemas com espaço
-sys.path.append(os.path.abspath("touch_utils"))
+# Mantém o nome original da pasta com espaço
+sys.path.append(os.path.abspath("touch utils"))
 
 # Imports dos módulos auxiliares
 try:
-    from touch_utils.audio_generator import text_to_audio
-    from touch_utils.youtube_transcriber import transcribe_and_summarize
-    from touch_utils.formatter import to_markdown
-    from touch_utils.pdf_processor import process_pdf_complete
+    from formatter import to_markdown
+    from audio_generator import text_to_audio
+    from youtube_transcriber import transcribe_and_summarize
+    from pdf_processor import process_pdf_complete
 except ImportError as e:
-    st.error(f"Erro ao importar módulos: {str(e)}. Verifique se a pasta 'touch_utils' existe com todos os arquivos necessários.")
+    st.error(f"Erro ao importar módulos: {str(e)}. Verifique se a pasta 'touch utils' existe com todos os arquivos necessários.")
     logger.error(f"Import error: {str(e)}")
+
+# Resto do código...
 
 
 # Configurações do aplicativo
