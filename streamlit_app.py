@@ -72,11 +72,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Importação OpenAI
+# Importação OpenAI - VERSÃO 1.0.0+
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 except ImportError:
     OPENAI_AVAILABLE = False
     st.error("Biblioteca OpenAI não está instalada. Algumas funcionalidades estarão indisponíveis.")
@@ -109,7 +109,7 @@ def text_to_audio(text):
     return base64.b64decode(sample_audio_base64)
 
 def summarize_text_openai(text, model):
-    """Analisa texto usando OpenAI"""
+    """Analisa texto usando OpenAI - API ATUALIZADA PARA 1.0.0+"""
     if not OPENAI_AVAILABLE:
         return "API da OpenAI não disponível. Verifique a configuração da chave API."
     
@@ -128,7 +128,8 @@ def summarize_text_openai(text, model):
         Use markdown para formatação.
         """
         
-        response = openai.ChatCompletion.create(
+        # API NOVA da OpenAI (1.0.0+)
+        response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "Você é um analista técnico especializado em extrair insights valiosos de documentos e vídeos técnicos."},
