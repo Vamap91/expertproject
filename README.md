@@ -1,19 +1,18 @@
-# 🎈 Blank app template
+# 🎙️ Narrador de Projetos com IA
 
-A simple Streamlit app template for you to modify!
+Este é um aplicativo desenvolvido com **Streamlit** para ler arquivos PDF ou vídeos do YouTube, extrair os principais pontos técnicos, gerar um resumo inteligente e transformar o conteúdo em um **áudio narrado**.
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+## 🔍 Funcionalidades
 
-### How to run it on your own machine
+- 📄 **Upload de PDF**: A IA lê o conteúdo e gera um resumo com pontos técnicos destacados.
+- 🎥 **Link do YouTube**: Transcreve o vídeo e extrai os principais tópicos automaticamente.
+- 🧠 **Resumo Inteligente**: Utiliza modelos de NLP para sintetizar informações com qualidade.
+- 🎧 **Narração em Áudio**: Converte o resumo em um arquivo de áudio pronto para ouvir ou baixar.
+- 📤 **Exportação**: Permite exportar o conteúdo resumido em formato Markdown.
 
-1. Install the requirements
+## 🚀 Como rodar localmente
 
-   ```
-   $ pip install -r requirements.txt
-   ```
-
-2. Run the app
-
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+1. Clone este repositório:
+```bash
+git clone https://github.com/seu-usuario/narrador-projetos.git
+cd narrador-projetos
